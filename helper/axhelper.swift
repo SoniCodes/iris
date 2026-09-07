@@ -1,12 +1,13 @@
 // axhelper: reads the macOS Accessibility API, speaks JSON over stdio.
 // one command per line in, one response per line out.
 //
-//   {"cmd":"ping"} {"cmd":"permission"} {"cmd":"apps"} {"cmd":"enable"}
-//   {"cmd":"dump"[,"pid":N|"bundleId":"..."][,"maxDepth":N,"maxNodes":N,
-//    "timeoutSeconds":N,"allAttributes":true]}
+//   {"cmd":"ping"} {"cmd":"permission"} {"cmd":"apps"} {"cmd":"frontmost"}
+//   {"cmd":"enable"} {"cmd":"dump"[,"pid":N|"bundleId":"..."][,"maxDepth":N,
+//    "maxNodes":N,"timeoutSeconds":N,"allAttributes":true]}
 
 import AppKit
 import ApplicationServices
+import Darwin
 import Foundation
 
 let defaultMaxDepth = 40
@@ -164,6 +165,9 @@ final class Walker {
         if let title = stringAttribute(element, attrTitle), !title.isEmpty { node["title"] = title }
         if let text = stringAttribute(element, attrDescription), !text.isEmpty { node["desc"] = text }
         if let help = stringAttribute(element, attrHelp), !help.isEmpty { node["help"] = help }
+        if let identifier = stringAttribute(element, kAXIdentifierAttribute as String), !identifier.isEmpty {
+            node["identifier"] = identifier
+        }
         if let enabled = boolAttribute(element, attrEnabled) { node["enabled"] = enabled }
         if let focused = boolAttribute(element, attrFocused), focused { node["focused"] = true }
 
@@ -215,12 +219,43 @@ final class Walker {
     }
 }
 
+func jsonInt(_ value: Any?) -> Int? {
+    if let number = value as? Int { return number }
+    if let number = value as? NSNumber { return number.intValue }
+    return nil
+}
+
+func processPath() -> String {
+    var size = UInt32(PATH_MAX)
+    var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+    guard _NSGetExecutablePath(&buffer, &size) == 0 else { return CommandLine.arguments[0] }
+    return URL(fileURLWithPath: String(cString: buffer)).resolvingSymlinksInPath().path
+}
+
 func runningApps() -> [NSRunningApplication] {
     NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
 }
 
+var ignoredPids: Set<pid_t> = [getpid(), getppid()]
+var lastForeignPid: pid_t?
+var currentReplyId: Any?
+
+func isIgnored(_ pid: pid_t) -> Bool {
+    ignoredPids.contains(pid)
+}
+
+func rememberForeign(_ app: NSRunningApplication) {
+    guard app.activationPolicy == .regular, !isIgnored(app.processIdentifier) else { return }
+    lastForeignPid = app.processIdentifier
+}
+
 func frontmostPid() -> pid_t? {
-    if let app = NSWorkspace.shared.frontmostApplication { return app.processIdentifier }
+    if let app = NSWorkspace.shared.frontmostApplication, !isIgnored(app.processIdentifier) {
+        return app.processIdentifier
+    }
+    if let pid = lastForeignPid, NSRunningApplication(processIdentifier: pid) != nil {
+        return pid
+    }
 
     let system = AXUIElementCreateSystemWide()
     guard let raw = copyValue(system, attrFocusedApp),
@@ -228,7 +263,7 @@ func frontmostPid() -> pid_t? {
     else { return nil }
 
     var pid: pid_t = 0
-    guard AXUIElementGetPid(raw as! AXUIElement, &pid) == .success else { return nil }
+    guard AXUIElementGetPid(raw as! AXUIElement, &pid) == .success, !isIgnored(pid) else { return nil }
     return pid
 }
 
@@ -243,6 +278,8 @@ func appInfo(for pid: pid_t) -> [String: Any] {
 }
 
 func emit(_ object: [String: Any]) {
+    var object = object
+    if let currentReplyId { object["id"] = currentReplyId }
     if let data = try? JSONSerialization.data(withJSONObject: object),
        let line = String(data: data, encoding: .utf8) {
         print(line)
@@ -253,7 +290,7 @@ func emit(_ object: [String: Any]) {
 }
 
 func resolveTarget(_ request: [String: Any]) -> pid_t? {
-    if let requested = request["pid"] as? Int { return pid_t(requested) }
+    if let requested = jsonInt(request["pid"]) { return pid_t(requested) }
     if let bundleId = request["bundleId"] as? String {
         return runningApps().first { $0.bundleIdentifier == bundleId }?.processIdentifier
     }
@@ -262,7 +299,7 @@ func resolveTarget(_ request: [String: Any]) -> pid_t? {
 
 func handleEnable(_ request: [String: Any]) {
     guard AXIsProcessTrusted() else {
-        emit(["ok": false, "trusted": false, "error": "accessibility permission not granted"])
+        emit(["ok": false, "trusted": false, "error": "accessibility permission not granted", "path": processPath()])
         return
     }
     guard let pid = resolveTarget(request) else {
@@ -286,7 +323,7 @@ func handleEnable(_ request: [String: Any]) {
 
 func handleDump(_ request: [String: Any]) {
     guard AXIsProcessTrusted() else {
-        emit(["ok": false, "trusted": false, "error": "accessibility permission not granted"])
+        emit(["ok": false, "trusted": false, "error": "accessibility permission not granted", "path": processPath()])
         return
     }
 
@@ -295,9 +332,9 @@ func handleDump(_ request: [String: Any]) {
         return
     }
 
-    let maxDepth = request["maxDepth"] as? Int ?? defaultMaxDepth
-    let maxNodes = request["maxNodes"] as? Int ?? defaultMaxNodes
-    let timeout = Float(request["timeoutSeconds"] as? Double ?? Double(defaultTimeout))
+    let maxDepth = jsonInt(request["maxDepth"]) ?? defaultMaxDepth
+    let maxNodes = jsonInt(request["maxNodes"]) ?? defaultMaxNodes
+    let timeout = (request["timeoutSeconds"] as? NSNumber)?.floatValue ?? defaultTimeout
     let allAttributes = request["allAttributes"] as? Bool ?? false
 
     let appElement = AXUIElementCreateApplication(pid)
@@ -338,29 +375,50 @@ func handleDump(_ request: [String: Any]) {
 
 func handle(_ line: String) {
     guard let data = line.data(using: .utf8),
-          let request = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let cmd = request["cmd"] as? String
+          let request = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     else {
+        emit(["ok": false, "error": "expected a JSON object with a cmd field"])
+        return
+    }
+
+    currentReplyId = request["id"]
+    defer { currentReplyId = nil }
+
+    guard let cmd = request["cmd"] as? String else {
         emit(["ok": false, "error": "expected a JSON object with a cmd field"])
         return
     }
 
     switch cmd {
     case "ping":
-        emit(["ok": true, "cmd": "ping", "trusted": AXIsProcessTrusted()])
+        emit([
+            "ok": true,
+            "cmd": "ping",
+            "trusted": AXIsProcessTrusted(),
+            "path": processPath(),
+            "pid": Int(getpid()),
+            "ppid": Int(getppid()),
+        ])
 
     case "permission":
         let shouldPrompt = request["prompt"] as? Bool ?? false
         if shouldPrompt {
             let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
             let trusted = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
-            emit(["ok": true, "trusted": trusted, "prompted": true])
+            emit(["ok": true, "trusted": trusted, "prompted": true, "path": processPath()])
         } else {
-            emit(["ok": true, "trusted": AXIsProcessTrusted(), "prompted": false])
+            emit(["ok": true, "trusted": AXIsProcessTrusted(), "prompted": false, "path": processPath()])
         }
 
     case "apps":
         emit(["ok": true, "apps": runningApps().map { appInfo(for: $0.processIdentifier) }])
+
+    case "frontmost":
+        if let pid = frontmostPid() {
+            emit(["ok": true, "app": appInfo(for: pid)])
+        } else {
+            emit(["ok": false, "error": "could not resolve a target application"])
+        }
 
     case "enable":
         handleEnable(request)
@@ -375,8 +433,26 @@ func handle(_ line: String) {
 
 setvbuf(stdout, nil, _IOLBF, 0)
 
-while let line = readLine(strippingNewline: true) {
-    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.isEmpty { continue }
-    handle(trimmed)
+if let app = NSWorkspace.shared.frontmostApplication {
+    rememberForeign(app)
 }
+
+NSWorkspace.shared.notificationCenter.addObserver(
+    forName: NSWorkspace.didActivateApplicationNotification,
+    object: nil,
+    queue: .main
+) { notification in
+    guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+    rememberForeign(app)
+}
+
+DispatchQueue.global(qos: .userInitiated).async {
+    while let line = readLine(strippingNewline: true) {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { continue }
+        DispatchQueue.main.sync { handle(trimmed) }
+    }
+    exit(0)
+}
+
+RunLoop.main.run()

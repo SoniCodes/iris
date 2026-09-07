@@ -1,9 +1,9 @@
-import { BrowserWindow, ipcMain, screen, type Rectangle } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, type Rectangle } from 'electron';
 import { Channels } from '../shared/channels';
 import { panelHtml, preloadScript } from './paths';
 
 const WIDTH = 520;
-const HEIGHT = 268;
+const HEIGHT = 320;
 const ANCHOR_GAP = 6;
 const SCREEN_MARGIN = 8;
 
@@ -14,6 +14,8 @@ interface PanelOptions {
 export class Panel {
   private readonly window: BrowserWindow;
   private readonly onVisibilityChange: (visible: boolean) => void;
+  private ignoreBlur = false;
+  private closing = false;
 
   constructor(options: PanelOptions) {
     this.onVisibilityChange = options.onVisibilityChange;
@@ -61,10 +63,14 @@ export class Panel {
     });
 
     if (process.env['IRIS_STAY_OPEN'] !== '1') {
-      this.window.on('blur', () => this.hide());
+      this.window.on('blur', () => {
+        if (this.ignoreBlur) return;
+        this.hide();
+      });
     }
 
     this.window.on('close', (event) => {
+      if (this.closing) return;
       event.preventDefault();
       this.hide();
     });
@@ -74,6 +80,10 @@ export class Panel {
     return this.window.isVisible();
   }
 
+  setIgnoreBlur(value: boolean): void {
+    this.ignoreBlur = value;
+  }
+
   toggle(anchor: Rectangle): void {
     if (this.isVisible) this.hide();
     else this.show(anchor);
@@ -81,16 +91,24 @@ export class Panel {
 
   show(anchor: Rectangle): void {
     this.window.setBounds(this.boundsBelow(anchor));
+    app.focus({ steal: true });
     this.window.show();
+    this.window.focus();
     this.window.webContents.send(Channels.PanelShown);
     this.onVisibilityChange(true);
   }
 
   hide(): void {
-    if (!this.isVisible) return;
+    if (this.closing || this.window.isDestroyed() || !this.isVisible) return;
     this.window.webContents.send(Channels.PanelHidden);
     this.window.hide();
     this.onVisibilityChange(false);
+  }
+
+  destroy(): void {
+    this.closing = true;
+    this.ignoreBlur = true;
+    if (!this.window.isDestroyed()) this.window.destroy();
   }
 
   get webContents() {

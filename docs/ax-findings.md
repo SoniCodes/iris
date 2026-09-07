@@ -111,6 +111,14 @@ empty `AXGroup`s.
 `AXScrollToVisible` is on nearly every node and means nothing; only `AXPress`
 and friends indicate a real control.
 
+## Open: dumping the host app
+
+A naive `NSWorkspace.frontmostApplication` while the panel is up returns
+Electron, not Safari. Warm-up dumps had the same bug, so Chromium apps stayed
+on their stub tree. The helper now ignores its own pid and its parent pid,
+remembers the last regular app that was frontmost, and the panel captures
+that pid before it shows.
+
 ## Latency
 
 Warm dumps run 345–393ms including the menu bar. Safari is the outlier at

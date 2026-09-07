@@ -4,6 +4,8 @@ export interface AxNode {
   subrole?: string;
   title?: string;
   desc?: string;
+  help?: string;
+  identifier?: string;
   value?: unknown;
   frame?: { x: number; y: number; w: number; h: number };
   actions?: string[];
@@ -37,7 +39,9 @@ export function shortRole(role: string | undefined): string {
 
 function textOf(node: AxNode): string {
   const value = typeof node.value === 'string' ? node.value : '';
-  const parts = [node.title, node.desc, value].filter((part): part is string => Boolean(part?.trim()));
+  const parts = [node.title, node.desc, node.help, value, node.identifier].filter(
+    (part): part is string => Boolean(part?.trim()),
+  );
   const text = parts[0] ?? '';
   return text.length > MAX_VALUE_CHARS ? `${text.slice(0, MAX_VALUE_CHARS)}…` : text;
 }

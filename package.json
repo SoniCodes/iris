@@ -17,7 +17,7 @@
     "build:renderer": "tsc -p tsconfig.renderer.json",
     "copy:renderer": "mkdir -p dist/renderer && cp app/renderer/index.html app/renderer/panel.css dist/renderer/",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "start": "npm run build && electron .",
+    "start": "npm run helper && npm run build && electron .",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
