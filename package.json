@@ -1,0 +1,28 @@
+{
+  "name": "iris",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first macOS assistant that answers questions about the app in front of you.",
+  "license": "MIT",
+  "main": "dist/main/main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "icons": "node tools/make-icons.mjs",
+    "helper": "./helper/build.sh",
+    "dump": "node tools/collect-dumps.mjs",
+    "build": "npm run build:main && npm run build:renderer && npm run copy:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "tsc -p tsconfig.renderer.json",
+    "copy:renderer": "mkdir -p dist/renderer && cp app/renderer/index.html app/renderer/panel.css dist/renderer/",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "npm run build && electron .",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "electron": "^44.2.0",
+    "typescript": "^5.9.2"
+  }
+}

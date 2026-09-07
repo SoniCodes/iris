@@ -1,0 +1,26 @@
+node_modules/
+dist/
+out/
+release/
+
+# secrets — never committed
+.env
+.env.*
+*.key
+*.pem
+
+# macOS
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+
+# Swift helper build output (stage 2)
+helper/.build/
+helper/axhelper
+
+# AX dumps contain whatever was on screen when they were taken — names, email
+# subjects, ticket contents. Scrub one before committing it.
+research/*.json
+!research/*.scrubbed.json
