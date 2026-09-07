@@ -161,3 +161,31 @@ kbd {
   font: inherit;
   font-size: 10px;
 }
+
+.answer {
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.error {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+.status {
+  margin-left: 10px;
+  color: var(--faint);
+}
+
+body[data-busy="true"] .eye {
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 44%, 56%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}

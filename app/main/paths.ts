@@ -11,3 +11,5 @@ export const panelHtml = fromAppRoot('dist', 'renderer', 'index.html');
 export function trayAsset(filename: string): string {
   return fromAppRoot('assets', 'tray', filename);
 }
+
+export const helperBinary = fromAppRoot('helper', 'axhelper');

@@ -16,6 +16,7 @@
     "app/main/**/*.ts",
     "app/preload/**/*.ts",
     "app/shared/**/*.ts",
-    "app/tree/**/*.ts"
+    "app/tree/**/*.ts",
+    "app/providers/**/*.ts"
   ]
 }

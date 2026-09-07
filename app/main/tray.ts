@@ -1,7 +1,9 @@
 import { Menu, Tray, nativeImage, type NativeImage, type Rectangle } from 'electron';
 import { trayAsset } from './paths';
 
-export type EyeState = 'closed' | 'open';
+export type EyeState = 'closed' | 'open' | 'thinking';
+
+const BLINK_MS = 420;
 
 interface EyeTrayOptions {
   onToggle: () => void;
@@ -11,8 +13,9 @@ interface EyeTrayOptions {
 
 export class EyeTray {
   private readonly tray: Tray;
-  private readonly icons: Record<EyeState, NativeImage>;
+  private readonly icons: Record<'closed' | 'open', NativeImage>;
   private state: EyeState = 'closed';
+  private blink: NodeJS.Timeout | null = null;
 
   constructor(options: EyeTrayOptions) {
     this.icons = {
@@ -36,6 +39,17 @@ export class EyeTray {
   setEye(state: EyeState): void {
     if (state === this.state) return;
     this.state = state;
+    this.stopBlink();
+
+    if (state === 'thinking') {
+      let open = false;
+      this.blink = setInterval(() => {
+        open = !open;
+        this.tray.setImage(open ? this.icons.open : this.icons.closed);
+      }, BLINK_MS);
+      return;
+    }
+
     this.tray.setImage(this.icons[state]);
   }
 
@@ -44,7 +58,14 @@ export class EyeTray {
   }
 
   destroy(): void {
+    this.stopBlink();
     this.tray.destroy();
+  }
+
+  private stopBlink(): void {
+    if (!this.blink) return;
+    clearInterval(this.blink);
+    this.blink = null;
   }
 }
 
