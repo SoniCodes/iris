@@ -142,10 +142,6 @@ export function formatShortcut(node: AxNode): string {
   return `${prefix}${character.toUpperCase()}`;
 }
 
-export function renderMenuPaths(menuBar: AxNode | null | undefined, maxPerMenu = 40): string {
-  return listMenuPaths(menuBar, maxPerMenu).join('\n');
-}
-
 export function listMenuPaths(menuBar: AxNode | null | undefined, maxPerMenu = Infinity): string[] {
   if (!menuBar) return [];
   const entries: Array<{ path: string; shortcut: string }> = [];

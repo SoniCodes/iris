@@ -7,7 +7,8 @@ import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { prune, renderOutline, renderMenuPaths, formatShortcut } = await import(join(ROOT, 'dist', 'tree', 'filter.js'));
+const { prune, renderOutline, formatShortcut } = await import(join(ROOT, 'dist', 'tree', 'filter.js'));
+const { fallbackMenuEvidence } = await import(join(ROOT, 'dist', 'tree', 'retrieve.js'));
 
 const show = process.argv.includes('--show');
 const files = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
@@ -22,7 +23,7 @@ for (const file of files) {
   const rawAll = JSON.stringify([...roots, dump.menuBar]);
   const pruned = prune(roots);
   const outline = renderOutline(pruned);
-  const menus = renderMenuPaths(dump.menuBar);
+  const menus = fallbackMenuEvidence('', dump.menuBar).join('\n');
 
   const countNodes = (nodes) => nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
 

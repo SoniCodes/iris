@@ -103,17 +103,27 @@ Until this is solved, any shortcut answer risks naming the hidden variant.
 
 ## Cost
 
-The filter in `app/tree/filter.ts` takes a raw dump down to something a small
-model can read:
+`app/tree/filter.ts` and `app/tree/retrieve.ts` take a raw dump down to
+something a small model can read. Remeasured 2026-09-14 with
+`tools/filter-preview.mjs`, which builds the evidence a question with no
+matching term would get, so these are the worst case rather than the typical
+one:
 
 | | raw JSON | to model | reduction |
 |---|---|---|---|
-| VS Code | 240,589 tok | 14,812 | 94% |
-| Safari | 209,794 tok | 7,813 | 96% |
+| VS Code | 249,002 tok | 14,365 | 94% |
+| Safari | 221,799 tok | 2,559 | 99% |
 
 Most of the saving is dropping `attrs` (research scaffolding, roughly half the
 payload) and splicing out structural wrappers — 480 of VS Code's 849 nodes were
 empty `AXGroup`s.
+
+Safari gets the rest from its menus, which shrink in three steps: 1,109 paths
+uncapped, 493 once each menu is capped at 40 items, 237 once History, Bookmarks
+and Recent Items are dropped. That is 19,223 tokens down to 2,061. History alone
+is 197 of the 493. Those menus hold page titles rather than commands, and a page
+title matches almost any question put to it, so they are excluded unless the
+question asks for them.
 
 `AXScrollToVisible` is on nearly every node and means nothing; only `AXPress`
 and friends indicate a real control.
@@ -130,3 +140,9 @@ that pid before it shows.
 
 Warm dumps run 345–393ms including the menu bar. Safari is the outlier at
 ~760ms, entirely because of 1,615 menu items from History and Bookmarks.
+
+Those are the same two menus the filter then throws away, so that time is spent
+reading something no question will ever be answered from. The helper walks them
+because it is told to walk the menu bar, and deciding which menus are worth
+reading is not its job. A `skipMenus` argument on `dump` would move the decision
+to the caller and keep the boundary clean. Not measured yet.
