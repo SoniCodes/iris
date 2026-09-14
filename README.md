@@ -7,6 +7,27 @@ remembers about that software.
 Everything runs on your machine. No account, no server, no cloud by default.
 It should work on a plane.
 
+## It will not make up a menu path
+
+A tree is not just cheaper to read than a screenshot. It is addressable, so an
+answer can be looked up rather than generated. When a question names something
+the tree already holds, Iris does exactly that:
+
+```
+how do I create a new private window?
+Use File > New Private Window (⇧⌘N).
+```
+
+That path and that shortcut were read out of the running app a moment earlier.
+No model is asked, so there is nothing to invent, and the answer costs the dump
+and nothing more. It works with no model pulled at all.
+
+The check has to stay narrow or it would confidently answer the wrong question,
+so every word that is not an action verb has to appear in the item it matched.
+Ask Safari how to stop an annoying noise and it will not hand you `View > Stop`;
+that question goes to the model like any other. Anything Iris cannot verify, it
+does not claim.
+
 ## Status: stage 3 of 6 — text in, text out
 
 The eye, the accessibility reader, and a local model are wired up. You ask a
@@ -24,10 +45,10 @@ are still later.
   answer is in flight.
 - No Dock icon, no app switcher entry, and opening the panel does not take
   the frontmost app away from whatever you were using.
-- On submit, Iris reads the accessibility tree of the app you were in and
-  streams an answer from Ollama.
-- Exact menu questions are answered from a path verified against the live tree;
-  broader questions still go to the model.
+- On submit, Iris reads the accessibility tree of the app you were in. A
+  question it can answer from a verified menu path is answered directly;
+  everything else is ranked down to the relevant part of the tree and streamed
+  through Ollama.
 
 **What does not work**
 
