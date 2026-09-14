@@ -5,6 +5,10 @@ const DEFAULT_MODEL = 'huihui_ai/qwen3-coder-abliterated:30b-a3b-instruct-q4_K_M
 const DEFAULT_CONTEXT = 16384;
 // ollama unloads after 5m by default; reloading an 18GB model costs ~45s
 const DEFAULT_KEEP_ALIVE = '30m';
+const MODEL_CACHE_MS = 30000;
+
+let modelCache: { endpoint: string; expiresAt: number; models: string[] } | null = null;
+let modelRequest: { endpoint: string; promise: Promise<string[]> } | null = null;
 
 export interface InferenceConfig {
   endpoint: string;
@@ -23,10 +27,30 @@ export function config(): InferenceConfig {
 }
 
 export async function listModels(settings: InferenceConfig): Promise<string[]> {
-  const response = await fetch(`${settings.endpoint}/api/tags`);
-  if (!response.ok) return [];
-  const body = (await response.json()) as { models?: Array<{ name?: string }> };
-  return (body.models ?? []).map((entry) => entry.name ?? '').filter(Boolean);
+  if (modelCache?.endpoint === settings.endpoint && modelCache.expiresAt > Date.now()) {
+    return modelCache.models;
+  }
+  if (modelRequest?.endpoint === settings.endpoint) return modelRequest.promise;
+
+  const endpoint = settings.endpoint;
+  const promise = fetch(`${endpoint}/api/tags`)
+    .then(async (response) => {
+      if (!response.ok) return [];
+      const body = (await response.json()) as { models?: Array<{ name?: string }> };
+      const models = (body.models ?? []).map((entry) => entry.name ?? '').filter(Boolean);
+      modelCache = {
+        endpoint,
+        expiresAt: Date.now() + MODEL_CACHE_MS,
+        models,
+      };
+      return models;
+    })
+    .finally(() => {
+      if (modelRequest?.endpoint === endpoint) modelRequest = null;
+    });
+
+  modelRequest = { endpoint, promise };
+  return promise;
 }
 
 export async function* stream(
