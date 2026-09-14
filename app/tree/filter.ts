@@ -109,10 +109,25 @@ const MOD_CONTROL = 4;
 const MOD_NO_COMMAND = 8;
 const MOD_KNOWN = MOD_SHIFT | MOD_OPTION | MOD_CONTROL | MOD_NO_COMMAND;
 
-// the bitmask is undocumented and not fully worked out, see docs/ax-findings.md.
-// bail out rather than emit a wrong shortcut.
+const VIRTUAL_KEYS = new Map<number, string>([
+  [48, '⇥'],
+  [53, '⎋'],
+  [96, 'F5'],
+  [99, 'F3'],
+  [100, 'F8'],
+  [101, 'F9'],
+  [103, 'F11'],
+  [109, 'F10'],
+  [111, 'F12'],
+  [123, '←'],
+  [124, '→'],
+  [125, '↓'],
+  [126, '↑'],
+]);
+
 export function formatShortcut(node: AxNode): string {
-  const character = node.cmdChar;
+  const character =
+    node.cmdVirtualKey == null ? node.cmdChar : VIRTUAL_KEYS.get(node.cmdVirtualKey);
   if (!character) return '';
 
   const modifiers = node.cmdModifiers ?? 0;
@@ -128,8 +143,12 @@ export function formatShortcut(node: AxNode): string {
 }
 
 export function renderMenuPaths(menuBar: AxNode | null | undefined, maxPerMenu = 40): string {
-  if (!menuBar) return '';
-  const lines: string[] = [];
+  return listMenuPaths(menuBar, maxPerMenu).join('\n');
+}
+
+export function listMenuPaths(menuBar: AxNode | null | undefined, maxPerMenu = Infinity): string[] {
+  if (!menuBar) return [];
+  const entries: Array<{ path: string; shortcut: string }> = [];
 
   const emit = (node: AxNode, trail: string[]): void => {
     const title = node.title?.trim();
@@ -143,15 +162,28 @@ export function renderMenuPaths(menuBar: AxNode | null | undefined, maxPerMenu =
       const shown = items.slice(0, maxPerMenu);
       for (const item of shown) emit(item, path);
       if (items.length > shown.length) {
-        lines.push(`${path.join(' > ')} > … ${items.length - shown.length} more`);
+        entries.push({
+          path: `${path.join(' > ')} > … ${items.length - shown.length} more`,
+          shortcut: '',
+        });
       }
       return;
     }
 
-    const shortcut = formatShortcut(node);
-    lines.push(shortcut ? `${path.join(' > ')}  ${shortcut}` : path.join(' > '));
+    entries.push({ path: path.join(' > '), shortcut: formatShortcut(node) });
   };
 
   for (const barItem of menuBar.children ?? []) emit(barItem, []);
-  return lines.join('\n');
+
+  const byPath = new Map<string, Set<string>>();
+  for (const entry of entries) {
+    const shortcuts = byPath.get(entry.path) ?? new Set<string>();
+    shortcuts.add(entry.shortcut);
+    byPath.set(entry.path, shortcuts);
+  }
+
+  return [...byPath].map(([path, shortcuts]) => {
+    const shortcut = shortcuts.size === 1 ? [...shortcuts][0] : '';
+    return shortcut ? `${path}  ${shortcut}` : path;
+  });
 }

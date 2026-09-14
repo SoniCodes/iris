@@ -66,21 +66,28 @@ AXMenuItemCmdGlyph       AXMenuItemMarkChar       AXMenuItemPrimaryUIElement
 AXIdentifier (1,524)     AXServesAsTitleForUIElements
 ```
 
-## Open: the modifier bitmask is not solved
+## Shortcut modifiers
 
-`AXMenuItemCmdModifiers` is undocumented and our decoding is **wrong or
-incomplete**. Evidence:
+`AXMenuItemCmdModifiers` uses the `AXMenuItemModifiers` mask: Shift is 1,
+Option is 2, Control is 4, and 8 removes the otherwise implicit Command key.
+Observed values across items holding a shortcut:
 
-- Safari reports `mods=2` for both `New Window` (really ⌘N) and `New Tab at End`
-  (really ⌥⌘T). One encoding, two different shortcuts.
-- Observed values across items holding a shortcut:
-  `{0:31, 1:18, 2:25, 3:6, 4:8, 8:2, 12:1, 13:1, 24:1, 28:3}`.
-  24 and 28 carry a bit (16) we cannot account for.
+```
+{0:31, 1:18, 2:25, 3:6, 4:8, 8:2, 12:1, 13:1, 24:1, 28:3}
+```
 
-`formatShortcut` in `app/tree/filter.ts` currently returns nothing for any value
-it does not recognise, rather than emitting a confident wrong answer.
+Values 24 and 28 carry an extra bit (16) outside that mask. `formatShortcut`
+returns nothing for those values.
 
-Unresolved, and needed before shortcuts ship.
+Special keys use `AXMenuItemCmdVirtualKey`. The dumps contain Tab, Escape,
+F3/F5/F8–F12, and all four arrow keys, which are rendered as visible glyphs.
+Virtual key 128 appears with both the globe and microphone symbols, so it is
+omitted.
+
+Safari also reports `mods=2` for both `New Window` (normally ⌘N) and `New Tab at
+End` (⌥⌘T). This is not a bitmask decoding problem; the tree is exposing a
+state-dependent or alternate item. When duplicate paths disagree on a shortcut,
+the filter emits the path without either shortcut.
 
 ## Open: alternate menu items are indistinguishable
 
