@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron';
 import { Channels } from '../shared/channels';
 import { buildPrompt } from '../tree/prompt';
+import { verifiedMenuAnswer } from '../tree/retrieve';
 import { config, listModels, stream } from '../providers/inference';
 import type { Helper } from './helper';
 
@@ -41,6 +42,13 @@ export class Ask {
 
       const appName = dump.app?.name ?? 'this app';
       say(Channels.AskStatus, `thinking about ${appName}`);
+
+      const verified = verifiedMenuAnswer(question, dump.menuBar);
+      if (verified) {
+        say(Channels.AskChunk, verified);
+        say(Channels.AskDone);
+        return;
+      }
 
       const settings = config();
       const models = await listModels(settings);

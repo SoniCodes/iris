@@ -26,6 +26,8 @@ are still later.
   the frontmost app away from whatever you were using.
 - On submit, Iris reads the accessibility tree of the app you were in and
   streams an answer from Ollama.
+- Exact menu questions are answered from a path verified against the live tree;
+  broader questions still go to the model.
 
 **What does not work**
 

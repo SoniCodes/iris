@@ -31,6 +31,33 @@ const ACTION_TERMS = new Set([
   'turn',
 ]);
 
+const ACTION_ALTERNATIVES = new Map<string, string[]>([
+  ['add', ['add', 'create', 'new']],
+  ['clear', ['clear', 'delete', 'remove']],
+  ['close', ['close', 'quit']],
+  ['create', ['create', 'add', 'new']],
+  ['delete', ['delete', 'remove', 'clear']],
+  ['disable', ['disable', 'turn']],
+  ['edit', ['edit']],
+  ['enable', ['enable', 'turn', 'show']],
+  ['hide', ['hide']],
+  ['make', ['make']],
+  ['move', ['move']],
+  ['print', ['print']],
+  ['quit', ['quit', 'close']],
+  ['reopen', ['reopen', 'open']],
+  ['remove', ['remove', 'delete', 'clear']],
+  ['run', ['run', 'start']],
+  ['save', ['save']],
+  ['show', ['show']],
+  ['start', ['start', 'run']],
+  ['stop', ['stop', 'end', 'quit']],
+  ['switch', ['switch', 'toggle']],
+  ['toggle', ['toggle', 'show', 'hide']],
+  ['turn', ['turn', 'enable', 'disable', 'show', 'hide']],
+  ['zoom', ['zoom']],
+]);
+
 const STOP = new Set([
   'a',
   'an',
@@ -214,6 +241,44 @@ export function fallbackMenuEvidence(
   menuBar: AxNode | null | undefined,
 ): string[] {
   return filterMenuLines(listMenuPaths(menuBar, 40), questionTerms(question));
+}
+
+function actionMatches(terms: string[], leaf: string): boolean {
+  for (const term of terms) {
+    const alternatives = ACTION_ALTERNATIVES.get(term);
+    if (alternatives && !alternatives.some((word) => score(leaf, [word]) > 0)) return false;
+  }
+  return true;
+}
+
+export function verifiedMenuAnswer(
+  question: string,
+  menuBar: AxNode | null | undefined,
+): string | null {
+  if (
+    !/\b(how|where|shortcut|open|close|show|hide|create|new|save|print|find|start|stop|switch|toggle|turn|enable|disable|add|remove|delete|move|zoom|clear|quit|reopen|run)\b/i.test(
+      question,
+    )
+  ) {
+    return null;
+  }
+
+  const terms = questionTerms(question);
+  const required = terms.filter((term) => !ACTION_TERMS.has(term));
+  const requiredTerms = required.length ? required : terms;
+  if (!requiredTerms.length) return null;
+
+  const match = rankedMenuLines(filterMenuLines(listMenuPaths(menuBar), terms), terms)[0];
+  if (!match) return null;
+
+  const leaf = leafOf(match.line);
+  if (!requiredTerms.every((term) => score(leaf, [term]) > 0)) return null;
+  if (!actionMatches(terms, leaf)) return null;
+
+  const path = pathOf(match.line);
+  const shortcut = match.line.slice(path.length).trim();
+  if (shortcut) return `Use ${path} (${shortcut}).`;
+  return `Use ${path}${/[.!?…]$/.test(path) ? '' : '.'}`;
 }
 
 export function outlineEvidence(nodes: PrunedNode[], question: string): PrunedNode[] {

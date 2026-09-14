@@ -6,7 +6,7 @@ import retrieve from '../dist/tree/retrieve.js';
 
 const { formatShortcut, listMenuPaths } = filter;
 const { buildPrompt } = prompt;
-const { questionTerms } = retrieve;
+const { questionTerms, verifiedMenuAnswer } = retrieve;
 
 function menuItem(title, cmdChar, cmdModifiers = 0) {
   return { role: 'AXMenuItem', title, cmdChar, cmdModifiers };
@@ -194,6 +194,35 @@ test('keeps all descendants of a matching screen container', () => {
   assert.match(text, /static text "Width"/);
   assert.match(text, /text field "1920"/);
   assert.doesNotMatch(text, /group "Sidebar"/);
+});
+
+test('answers exact menu questions from verified evidence', () => {
+  const menus = menuBar([
+    menuItem('Print…', 'P'),
+    menuItem('New Tab', 'T'),
+    menuItem('New Tab at End', 'T', 2),
+  ]);
+
+  assert.equal(verifiedMenuAnswer('How do I open a new tab?', menus), 'Use File > New Tab (⌘T).');
+  assert.equal(verifiedMenuAnswer('What is the shortcut for print?', menus), 'Use File > Print… (⌘P).');
+
+  const history = menuBar([menuItem('Clear History…', '')], 'History');
+  assert.equal(verifiedMenuAnswer('How do I clear my history?', history), 'Use History > Clear History…');
+});
+
+test('does not force a menu answer for semantic or descriptive questions', () => {
+  const menus = menuBar([menuItem('Zoom In', '+'), menuItem('Text Encoding', '')], 'View');
+
+  assert.equal(verifiedMenuAnswer('How do I make the text bigger?', menus), null);
+  assert.equal(verifiedMenuAnswer('What is on my screen?', menus), null);
+});
+
+test('does not treat matching history content as a command', () => {
+  const history = menuBar([menuItem('LineLeap Tickets', '')], 'History');
+  assert.equal(verifiedMenuAnswer('How do I create a ticket?', history), null);
+
+  const file = menuBar([menuItem('New Ticket', 'N')]);
+  assert.equal(verifiedMenuAnswer('How do I create a ticket?', file), 'Use File > New Ticket (⌘N).');
 });
 
 test('keeps unrelated history and bookmarks out of model context', () => {
