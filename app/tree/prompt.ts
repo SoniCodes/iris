@@ -1,7 +1,12 @@
-import { prune, renderMenuPaths, renderOutline, type AxNode } from './filter';
+import {
+  prune,
+  renderOutline,
+  type AxNode,
+} from './filter';
+import { fallbackMenuEvidence, menuEvidence, outlineEvidence } from './retrieve';
 
-const MAX_MENU_CHARS = 18000;
-const MAX_OUTLINE_CHARS = 24000;
+const MAX_MENU_CHARS = 12000;
+const MAX_OUTLINE_CHARS = 12000;
 
 export interface PromptInput {
   appName: string;
@@ -20,19 +25,25 @@ function cap(text: string, limit: number): string {
 
 export function buildPrompt(input: PromptInput): string {
   const roots = [input.root, ...(input.windows ?? [])].filter(Boolean) as AxNode[];
-  const onScreen = cap(renderOutline(prune(roots)), MAX_OUTLINE_CHARS);
-  const menus = cap(renderMenuPaths(input.menuBar), MAX_MENU_CHARS);
+  const pruned = prune(roots);
 
-  return `You answer questions about ${input.appName}, the macOS app the user is looking at right now.
+  const matchedMenus = menuEvidence(input.question, input.menuBar);
+  const menus = cap(
+    (matchedMenus.length
+      ? matchedMenus
+      : fallbackMenuEvidence(input.question, input.menuBar)
+    ).join('\n'),
+    MAX_MENU_CHARS,
+  );
 
-Everything below was read from that app a moment ago. It is its actual current state, not documentation and not something you remember about this software.
+  const outlineNodes = outlineEvidence(pruned, input.question);
+  const onScreen = cap(renderOutline(outlineNodes), MAX_OUTLINE_CHARS);
 
-Rules:
-- Answer only from what is listed below.
-- Never invent a menu path, control name or keyboard shortcut. If it is not listed, say you cannot see it.
-- Quote names exactly as they appear.
-- Where a keyboard shortcut is listed, give it.
-- Be brief. Two or three sentences, or short numbered steps.
+  return `You answer questions about ${input.appName}. The lists below were read from that app just now.
+
+Answer the question only. Do not describe the rest of the screen.
+Use a name or shortcut only if it appears below, on the same line as the thing it belongs to. If no shortcut is written next to a path, do not invent one.
+If you cannot see how to do it, say so. Two or three sentences, or short numbered steps.
 
 ## Menus
 ${menus || '(none read)'}
