@@ -246,3 +246,38 @@ test('keeps unrelated history and bookmarks out of model context', () => {
   });
   assert.match(historyPrompt, /History > LineLeap Tickets/);
 });
+
+test('widens to the whole menu when a question word appears nowhere', () => {
+  const file = menuBar([menuItem('New Text File', 'N'), menuItem('Save', 'S')]).children[0];
+  const view = menuBar([menuItem('Zoom In', '='), menuItem('Reset Zoom', '0')], 'View').children[0];
+
+  const menus = buildPrompt({
+    appName: 'Code',
+    question: 'How do I make the text bigger?',
+    menuBar: { role: 'AXMenuBar', children: [file, view] },
+  })
+    .split('## Menus\n')[1]
+    .split('\n\n## On screen')[0];
+
+  assert.match(menus, /View > Zoom In/);
+  assert.match(menus, /File > New Text File/);
+});
+
+test('stays narrow when the menus use every word of the question', () => {
+  const file = menuBar([menuItem('New Text File', 'N'), menuItem('Save', 'S')]).children[0];
+  const view = menuBar(
+    [menuItem('Make Text Bigger', '+'), menuItem('Enter Full Screen', 'F', 4)],
+    'View',
+  ).children[0];
+
+  const menus = buildPrompt({
+    appName: 'Safari',
+    question: 'How do I make the text bigger?',
+    menuBar: { role: 'AXMenuBar', children: [file, view] },
+  })
+    .split('## Menus\n')[1]
+    .split('\n\n## On screen')[0];
+
+  assert.match(menus, /View > Make Text Bigger/);
+  assert.doesNotMatch(menus, /File > Save/);
+});

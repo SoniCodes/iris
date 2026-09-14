@@ -213,12 +213,23 @@ function rankedMenuLines(lines: string[], terms: string[]): RankedMenuLine[] {
     );
 }
 
+function unseenContentTerms(lines: string[], terms: string[]): string[] {
+  return terms
+    .filter((term) => !ACTION_TERMS.has(term))
+    .filter((term) => !lines.some((line) => score(leafOf(line), [term]) > 0));
+}
+
 export function menuEvidence(
   question: string,
   menuBar: AxNode | null | undefined,
 ): string[] {
   const terms = questionTerms(question);
   const lines = filterMenuLines(listMenuPaths(menuBar), terms);
+
+  // a word the menus never use means the ranking is matching on the leftovers,
+  // so widen to the whole menu rather than narrowing confidently to the wrong one
+  if (unseenContentTerms(lines, terms).length) return [];
+
   const ranked = rankedMenuLines(lines, terms).slice(0, MAX_DIRECT_MENU_MATCHES);
 
   let neighborhood = ranked[0] ? menuOf(ranked[0].line) : '';
