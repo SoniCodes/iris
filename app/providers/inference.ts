@@ -1,10 +1,15 @@
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:11434';
-const DEFAULT_MODEL = 'huihui_ai/qwen3-coder-abliterated:30b-a3b-instruct-q4_K_M';
+// small on purpose: the model reads a short list and quotes from it, and the
+// exact menu questions never reach it at all. see docs/model-choice.md
+const DEFAULT_MODEL = 'qwen3:4b';
 
 // ollama defaults to 4096, which silently truncates a filtered tree
 const DEFAULT_CONTEXT = 16384;
-// ollama unloads after 5m by default; reloading an 18GB model costs ~45s
+// ollama unloads after 5m by default, and a reload is dead time on the next ask
 const DEFAULT_KEEP_ALIVE = '30m';
+// generation, not prompt size, is what costs here: a 816 token prompt drew 2,195
+// tokens of thinking out loud. an answer past this length is wrong anyway
+const DEFAULT_MAX_TOKENS = 300;
 const MODEL_CACHE_MS = 30000;
 
 let modelCache: { endpoint: string; expiresAt: number; models: string[] } | null = null;
@@ -15,6 +20,7 @@ export interface InferenceConfig {
   model: string;
   context: number;
   keepAlive: string;
+  maxTokens: number;
 }
 
 export function config(): InferenceConfig {
@@ -23,6 +29,7 @@ export function config(): InferenceConfig {
     model: process.env['IRIS_MODEL'] ?? DEFAULT_MODEL,
     context: Number(process.env['IRIS_CONTEXT'] ?? DEFAULT_CONTEXT),
     keepAlive: process.env['IRIS_KEEP_ALIVE'] ?? DEFAULT_KEEP_ALIVE,
+    maxTokens: Number(process.env['IRIS_MAX_TOKENS'] ?? DEFAULT_MAX_TOKENS),
   };
 }
 
@@ -65,8 +72,11 @@ export async function* stream(
       model: settings.model,
       prompt,
       stream: true,
+      // qwen3 and friends reason before answering, which costs 5x here for an
+      // answer that is quoted off a list. models without it ignore the flag
+      think: false,
       keep_alive: settings.keepAlive,
-      options: { num_ctx: settings.context, temperature: 0.2 },
+      options: { num_ctx: settings.context, temperature: 0.2, num_predict: settings.maxTokens },
     }),
     signal,
   });
@@ -108,6 +118,7 @@ export async function warm(settings: InferenceConfig): Promise<void> {
         model: settings.model,
         prompt: '',
         stream: false,
+        think: false,
         keep_alive: settings.keepAlive,
         options: { num_ctx: settings.context },
       }),

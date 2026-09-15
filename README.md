@@ -63,8 +63,16 @@ come back thin. See `docs/ax-findings.md`.
 - [Ollama](https://ollama.com) running locally, with a model pulled
 - Accessibility permission (see below)
 
-The default model is `huihui_ai/qwen3-coder-abliterated:30b-a3b-instruct-q4_K_M`.
-Override with `IRIS_MODEL` if you use something else.
+The default model is `qwen3:4b`, about 2.6GB:
+
+```bash
+ollama pull qwen3:4b
+```
+
+It is deliberately small. Exact menu questions never reach a model at all, and
+what is left is reading a short list and quoting from it rather than recalling
+anything. A bigger model is a `IRIS_MODEL` away if you want one, along with
+`IRIS_ENDPOINT`, `IRIS_CONTEXT` and `IRIS_KEEP_ALIVE`.
 
 ## Run it
 
